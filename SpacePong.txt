@@ -1,0 +1,530 @@
+var phase = 0; // 0 = startingScreen, 1 = ingame, 2 = gameover, 3 = win
+
+var ball;
+var ball2;
+var gun;
+var invaders = [];
+var bombs = [];
+var bombCooldown;
+
+
+function setup() {
+  createCanvas(1100, 700);
+  textAlign(CENTER); // alignes text centered
+  
+  ball = new BALL();
+  ball2 = new BALL();
+  gun = new GUN();
+  for(let y = 0; y < 3; y++) {
+    for(let x = 0; x < 10; x++){
+      invaders.push(new INVADER(x*95 + 100,y*95 + 20));
+    }
+  }
+  bombCooldown = int(random(50, 200));
+}
+
+function draw() {
+  background(10);
+
+  switch (phase) {
+    case 0: // starting screen
+      //create Logo
+      textSize(128);
+      text("S", width/2 - 29, height/2 - 23);
+      text("P", width/2 + 29, height/2 + 23);
+      textSize(24);
+      text("SPACEPONG", width/2, height/2+50)
+      textSize(16);
+      fill(255);
+      text("to START press SPACE", width/2, height - 100);
+      return;
+    case 1: // main game loop
+      ball.update();
+      ball2.update();
+      gun.update();
+      updateInvaders();
+      updateBombs();
+      return;
+    case 2: // game over screen
+      fill(224, 47, 11);
+      textSize(45);
+      strokeWeight(2);
+      stroke(232, 209, 204);
+      text("GAME OVER", width/2, height/2);
+      
+      noStroke();
+      textSize(16);
+      fill(255);
+      text("to RESTART press SPACE", width/2, height - 100);
+      return;
+    case 3: // win screen
+      fill(24, 168, 57);
+      textSize(45);
+      strokeWeight(2);
+      stroke(201, 235, 197);
+      text("YOU WIN", width/2, height/2);
+      
+      noStroke();
+      textSize(16);
+      fill(255);
+      text("to RESTART press SPACE", width/2, height - 100);
+      return;
+  }
+}
+
+// updates every Invader
+function updateInvaders(){
+  for(var i = invaders.length-1; i >= 0; i--) {
+       if(invaders[i].position.y < -50) invaders.splice(i,1); // every shot which left the window will be deleted from the array
+  }
+  for(let i = 0; i < invaders.length; i++) invaders[i].update();
+  
+  if(invaders.length == 0) phase = 3;
+}
+//changes Direction of every Invader
+function changeInvadersDirection(){
+  for(let i = 0; i < invaders.length; i++) invaders[i].changeDirection();
+}
+// handles collision of the ball with the invaders
+function collisionInvaders(cx, cy, radius) {
+  let collision = "none";
+  for(let i = 0; i < invaders.length; i++) {
+    if(invaders[i].collisionBall(cx,cy,radius) != "none") collision = invaders[i].collisionBall(cx,cy,radius);
+  }
+  return collision;
+}
+// updates every bomb every frame
+function updateBombs() {
+  // create new bombs, when cooldown is 0
+  bombCooldown--;
+  if(bombCooldown <= 0) {
+    bombCooldown = int(random(100, 350));
+    let index = int(random(0,invaders.length));
+    bombs.push(new BOMB(invaders[index].position.x + 10, invaders[index].position.y + invaders[index].height));
+  }
+  
+  // deletes bombs which left the screen
+  for(var i = bombs.length-1; i >= 0; i--) {
+       if(bombs[i].position.y > height + 50) bombs.splice(i,1); // every shot which left the window will be deleted from the array
+  }
+  
+  // updates the bomb (show, move)
+  for(let i = 0; i < bombs.length; i++) bombs[i].update();
+}
+// handles collision of bomb with a rectangular hitbox
+function bombCollision(rx, ry, rw, rh) { //parameters of hitbox
+  let collision = false; // returns true if there was a collision with a shot
+  for(let i = 0; i < bombs.length; i++){
+    if(bombs[i].collision(rx,ry,rw,rh)) collision = true;
+  }
+  return collision;
+}
+
+// handles key input
+function keyPressed() {
+  switch (phase) {
+    case 0:
+      if(key == ' ') phase = 1;
+      return;
+    case 1:
+      gun.keyPressed(key);
+      return;
+    case 2:
+      if(key == ' ') restart();
+      return;
+    case 3:
+      if(key == ' ') restart();
+      return;
+  
+  }
+}
+// handles key Input
+function keyReleased() {
+  if(phase == 1) gun.keyReleased(key);
+}
+
+function restart() {
+  phase = 1;
+  
+  invaders = [];
+  bombs = [];
+  
+  ball = new BALL();
+  ball2 = new BALL();
+  gun = new GUN();
+  for(let y = 0; y < 3; y++) {
+    for(let x = 0; x < 10; x++){
+      invaders.push(new INVADER(x*95 + 100,y*95 + 20));
+    }
+  }
+  bombCooldown = int(random(50, 200));
+}
+
+// function to detect collision between a circle and a rectangle
+function circleRect(cx,cy,radius,rx,ry,rw,rh) {
+
+  // temporary variables to set edges for testing
+  var testX = cx;
+  var testY = cy;
+
+  // which edge is closest?
+  if (cx < rx)         testX = rx;      // test left edge
+  else if (cx > rx+rw) testX = rx+rw;   // right edge
+  if (cy < ry)         testY = ry;      // top edge
+  else if (cy > ry+rh) testY = ry+rh;   // bottom edge
+
+  // get distance from closest edges
+  var distX = cx-testX;
+  var distY = cy-testY;
+  
+  var distance = sqrt( (distX*distX) + (distY*distY) );
+  
+
+  // if the distance is less than the radius, collision!
+  if (distance <= radius) {
+    return true;
+  }
+  return false;
+}
+
+
+class BALL {
+  constructor() {
+    this.position = createVector(random(50,width-50),random(height/2,height/2+180));
+    this.velocity = createVector(random(-1,1),random(0,-1));
+    this.ballSpeed = 3;
+    this.radius = 8;
+    this.cooldown = 0;
+  }
+  // draws ball
+  show() {
+    fill(255);
+    circle(this.position.x,this.position.y,this.radius*2);
+  }
+  // moves ball according to speed and direction
+  move(){
+    this.velocity.setMag(this.ballSpeed); // set the magnitude of the velocity vector to the desired ball speed
+    this.position.add(this.velocity); // adds the velocity onto the current position
+  }
+  // updates ball every frame (collision, moving, drawing)
+  update(){
+    this.checkBorders();
+    this.checkGun();
+    this.checkShots();
+    this.checkInvaders();
+    this.checkBombs();
+    
+    this.move();
+    this.show();
+    
+  }
+  
+  // check if ball left borders and changes direction if neccacary
+  checkBorders() { // checks if the ball hit the left, top, or right borders
+    if(this.position.x + this.radius > width) this.velocity.x *= -1;
+    if(this.position.x - this.radius < 0) this.velocity.x *= -1;
+    if(this.position.y - this.radius < 0) this.velocity.y *= -1;
+    if(this.position.y > height) phase = 2; // game over, ball left window on the bottom
+  }
+  // checks a collision with the gun; changes direction
+  checkGun(){
+    if(circleRect(this.position.x, this.position.y, this.radius, gun.position.x, gun.position.y, gun.width, 5)) {// ball hits gun/paddle; 5 is the hitbox height of the sheild
+      this.velocity.y *= -1; 
+      this.position.y = gun.position.y - this.radius; // bug fix: ball changes direction multiple times, as there are multiple collisions
+    }
+  }  
+  // checks if the ball got shot; creates new one
+  checkShots(){
+    if(gun.shotCollision(this.position.x - this.radius, this.position.y - this.radius, this.radius*2, this.radius*2)) { // collision with shot (hitbox is a rectangle)
+      // create new ball
+      this.position = createVector(random(50,width-50),random(height/2,height/2+180));
+      this.velocity = createVector(random(-1,1),random(0,-1));
+    }
+  }
+  // checks if the ball hit a bomb; bomb will be destroyed
+  checkBombs() {
+   bombCollision(this.position.x - this.radius, this.position.y - this.radius, this.radius*2, this.radius*2)
+  }
+  // checks if ball hits an invader; changes direction
+  checkInvaders(){
+    this.cooldown--;
+    if(this.cooldown <= 0) {
+      let collisionSide = collisionInvaders(this.position.x, this.position.y, this.radius); // either: "left", "top", "right", "bottom", "none"\
+      
+      if(collisionSide == "top or bottom") {
+        this.velocity.y *= -1;
+        this.cooldown = 5;
+      }
+    else if(collisionSide == "left or right") {
+      this.velocity.x *= -1;
+      this.cooldown = 5;
+    }
+    }
+    
+  }
+}
+
+class BOMB {
+  constructor(startPosX, startPosY) {
+    this.position = createVector(startPosX, startPosY);
+    this.speed = 6;
+    this.width = 15;
+    this.height = 30;
+  }
+  // draws bomb
+  show(){
+    //rect(this.position.x, this.position.y, this.width, this.height); //hitbox
+    stroke(255);
+    strokeWeight(2);
+    beginShape();
+    curveVertex(this.position.x, this.position.y);
+    curveVertex(this.position.x, this.position.y);
+    curveVertex(this.position.x+2, this.position.y+10);
+    curveVertex(this.position.x, this.position.y+23);
+    curveVertex(this.position.x+this.width/2, this.position.y+30);
+    curveVertex(this.position.x+this.width, this.position.y+23);
+    curveVertex(this.position.x+this.width-2, this.position.y+10);
+    curveVertex(this.position.x+this.width, this.position.y);
+    curveVertex(this.position.x+this.width, this.position.y);
+    curveVertex(this.position.x, this.position.y);
+    curveVertex(this.position.x, this.position.y);
+    endShape();
+    
+  }
+  // moves bomb downwards
+  move() {
+    this.position.y += this.speed;
+  }
+  // updates bomb every frame
+  update() {
+    this.checkShots();
+    this.move();
+    this.show(); 
+  }
+  // checks collision with shots
+  checkShots() {
+    if(gun.shotCollision(this.position.x, this.position.y, this.width, this.height)) {
+      this.position.y = height+50; // removes bomb
+    }
+  }
+  // checks for collision of bomb with rect
+  collision(rx, ry, rw, rh) { 
+    if(this.position.x + this.width > rx && this.position.x < rx + rw && this.position.y + this.height > ry && this.position.y < ry + rh) {
+      this.position.y = height+50; // removes bomb
+      return true;
+    }else return false;
+  }
+}
+
+class GUN {
+  constructor() {
+    this.position = createVector(width / 2, height - 100);
+    this.width = 100;
+    this.height = 30;
+    this.aKey = false;
+    this.dKey = false;
+    this.speed = 8;
+    this.shots = [];
+    this.shootingCooldown = 25;
+  }
+  // draws gun
+  show() {
+    noStroke();
+    //rect(this.position.x, this.position.y, this.width, this.height); // hitbox
+    stroke(52, 186, 207);
+    strokeWeight(3);
+    line(    // shield long side left
+      this.position.x + 10,
+      this.position.y,
+      this.position.x + 45,
+      this.position.y
+    );
+    line(// shield long side right
+      this.position.x + 55,
+      this.position.y,
+      this.position.x + 90,
+      this.position.y
+    );
+    line(// shield short side left
+      this.position.x,
+      this.position.y + 5,
+      this.position.x + 10,
+      this.position.y
+    );
+    line(// shield short side right
+      this.position.x + 100,
+      this.position.y + 5,
+      this.position.x + 90,
+      this.position.y
+    );
+    fill(52, 186, 207, 50);
+    stroke(255);
+    strokeWeight(1);
+    triangle( // gun
+      this.position.x + 50,
+      this.position.y + 2,
+      this.position.x + 40,
+      this.position.y + 30,
+      this.position.x + 60,
+      this.position.y + 30
+    );
+    
+    for(let i = 0; i < this.shots.length; i++) this.shots[i].show();
+  }
+  // moves gun (A and D; arrow keys)
+  move() {
+    if (this.aKey && this.position.x - this.speed > 0)
+      this.position.x -= this.speed;
+    if (this.dKey && this.position.x + this.speed + this.width < width)
+      this.position.x += this.speed;
+  }
+  // updates gun and shots every frame
+  update() {
+    this.shootingCooldown--;
+    
+    this.move();
+    this.show();
+    
+    // update Shots
+    for(var i = this.shots.length-1; i >= 0; i--) {
+       if(this.shots[i].position.y < -50) this.shots.splice(i,1); // every shot which left the window will be deleted from the array
+    }
+    for(let i = 0; i < this.shots.length; i++) this.shots[i].update();
+    
+    // if a collision with abomb occurs it's game over
+    if(bombCollision(this.position.x, this.position.y, this.width, this.height)) phase = 2;
+  }
+  // returns true if there was any collision between rect and shots; (shot will be destroyed)
+  shotCollision(rx, ry, rw, rh) { //parameters of hitbox
+    let collision = false; // returns true if there was a collision with a shot
+    for(let i = 0; i < this.shots.length; i++){
+      if(this.shots[i].collision(rx,ry,rw,rh)) collision = true;
+    }
+    return collision;
+  }
+  
+  // handles key Input for the gun
+  keyPressed(key) {
+    if (key == "a" || key == "A" || keyCode === LEFT_ARROW) this.aKey = true;
+    if (key == "d" || key == "D" || keyCode === RIGHT_ARROW) this.dKey = true;
+    if (key == ' ' && this.shootingCooldown < 0) {
+      this.shootingCooldown = 25;
+      this.shots.push(new SHOT(this.position.x + 50, this.position.y -12)); 
+    }
+  }
+  // handles key Input for the gun
+  keyReleased(key) {
+    if (key == "a" || key == "A" || keyCode === LEFT_ARROW) this.aKey = false;
+    if (key == "d" || key == "D" || keyCode === RIGHT_ARROW) this.dKey = false;
+  }
+}
+
+
+class INVADER {
+  constructor(startPosX, startPosY){
+    this.position = createVector(startPosX, startPosY);
+    this.speed = 1.5;
+    this.width = 35;
+    this.height = 35;
+    this.invaderDirection = -1;
+  }
+  
+  // draws Invader
+  show() { 
+    stroke(255);
+    strokeWeight(2);
+    noFill();
+    rect(this.position.x, this.position.y, this.width,this.height, 20, 20, 5, 5); //body
+    
+    // top left
+    line(this.position.x + 3, this.position.y + 5, this.position.x, this.position.y); 
+    circle(this.position.x, this.position.y, 3);
+    
+    // top rigth
+    line(this.position.x + this.width - 3, this.position.y + 5, this.position.x + this.width, this.position.y);
+    circle(this.position.x + this.width, this.position.y, 3);
+    
+    // eyes
+    circle(this.position.x + 10, this.position.y + 13, 3);
+    circle(this.position.x + this.width - 10, this.position.y + 13, 3);
+    
+    // mouth; from left to right
+    line(this.position.x + 8, this.position.y + 27, this.position.x + 11, this.position.y + 24);  
+    line(this.position.x + 11, this.position.y + 24, this.position.x + 14, this.position.y + 27);
+    line(this.position.x + 14, this.position.y + 27, this.position.x + 17, this.position.y + 24); 
+    line(this.position.x + 17, this.position.y + 24, this.position.x + 20, this.position.y + 27);
+    line(this.position.x + 20, this.position.y + 27, this.position.x + 23, this.position.y + 24);
+    line(this.position.x + 23, this.position.y + 24, this.position.x + 26, this.position.y + 27);
+  }
+  // moves Invader in Direction
+  move() {
+    this.position.x += this.speed * this.invaderDirection;
+  }
+  // changes Direction of the Invader and moves the Invader one step down
+  changeDirection() {
+    // changes direction
+    this.invaderDirection *= -1;
+    // moves Invader down
+    this.position.y += 5;
+  }
+  // check if the Invaders have to change direction
+  checkBorder() {
+    if(this.position.x + this.width + 5 > width || this.position.x - 5 < 0) changeInvadersDirection();
+  }
+  // check for a collision with a bullet
+  checkShots() {
+    if(gun.shotCollision(this.position.x, this.position.y, this.width, this.height)) {
+      this.position.y = -1000;
+    }
+  }
+  // updates the Invader ones per frame
+  update() {
+    this.move();
+    this.show();
+    this.checkBorder();
+    this.checkShots();
+  }
+  // checks for collision with the ball and returns the side
+  collisionBall(cx, cy, radius) {
+    if(circleRect(cx,cy,radius,this.position.x,this.position.y,this.width,this.height)) { // collisiojn occured
+      // on which side of the invader?
+      if(cy > this.position.y + this.height) return "top or bottom";
+      else if (cy < this.position.y) return "top or bottom";
+      else if (cx < this.position.x) return "left or right";
+      else if(cx > this.position.x + this.width) return "left or right";
+    }
+    return "none";
+    
+  }
+}
+
+
+class SHOT{
+  constructor(startPosX, startPosY) {
+    this.position = createVector(startPosX, startPosY);
+    this.speed = 10;
+    this.length = 15;
+  }
+  // draws the shot/bullet
+  show(){
+    stroke(255);
+    strokeWeight(3);
+    line(this.position.x, this.position.y, this.position.x, this.position.y + this.length)
+  }
+  // moves the shot
+  move() {
+    this.position.y -= this.speed;
+  }
+  // updates the shot every frame
+  update() {
+    this.move();
+    this.show();
+  }
+  // checks for collisions of the shot with the rectangle
+  collision(rx, ry, rw, rh) { 
+    if(this.position.x > rx && this.position.x < rx + rw && this.position.y + this.length > ry && this.position.y < ry + rh) {
+      this.position.y = -50; // removes shot
+      return true;
+    }else return false;
+  }
+}
